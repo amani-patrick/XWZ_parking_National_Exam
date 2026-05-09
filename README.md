@@ -48,14 +48,19 @@ Service       Service         Service    Service
 
 ---
 
-### Option A: Docker Compose (Recommended)
+### Option A: Docker Compose (Recommended - Super Fast)
+
+This project uses GitHub Actions CI/CD to pre-build all microservices. You do NOT need to wait for your PC to compile them!
 
 ```bash
-# Clone and start all services
-docker-compose up --build
+# 1. Pull the pre-built cloud images (takes seconds)
+docker-compose pull
 
-# Initialize database (first time only)
-docker exec -i xwz-parking_postgres_1 psql -U xwz -d xwz_parking < schema.sql
+# 2. Start all services in the background
+docker-compose up -d
+
+# 3. Initialize database (first time only)
+docker exec -i xwz-parking-postgres-1 psql -U xwz -d xwz_parking < schema.sql
 ```
 
 ### Option B: Manual Setup
