@@ -66,14 +66,14 @@ psql -U postgres
 CREATE DATABASE xwz_parking;
 \q
 
-psql -U postgres -d xwz_parking -f schema.sql
+psql -U postgres -d xwz_parking -f schema.sql 
 ```
 
 #### 2. Start API Gateway
 ```bash
 cd api-gateway
 npm install
-cp .env.example .env   # edit as needed
+cp .env.example .env  
 npm start
 ```
 
@@ -114,13 +114,7 @@ npm start
 
 ---
 
-## 🔑 Default Credentials
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@xwzparking.rw | Admin@1234 |
-
----
 
 ## 📚 API Documentation
 
@@ -133,7 +127,7 @@ Swagger UI available at: **http://localhost:5000/api/docs**
 All API endpoints (except `/auth/register` and `/auth/login`) require a JWT token:
 
 ```
-Authorization: Bearer <your_jwt_token>
+Authorization: Bearer <jwt_token>
 ```
 
 ---
@@ -153,7 +147,7 @@ Authorization: Bearer <your_jwt_token>
 - ✅ PostgreSQL schema with UUID primary keys
 - ✅ Users table: id, firstName, lastName, email, password
 - ✅ Indexes on frequently queried columns
-- ✅ Automatic `updated_at` triggers
+- ✅ Automatic `updated_at` through triggers
 
 ### Task 2 — Authentication & Roles
 - ✅ JWT-based authentication (24h expiry)
