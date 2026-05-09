@@ -53,13 +53,17 @@ Service       Service         Service    Service
 This project uses GitHub Actions CI/CD to pre-build all microservices. You do NOT need to wait for your PC to compile them!
 
 ```bash
-# 1. Pull the pre-built cloud images (takes seconds)
+# 1.0 Clone the Git repo and switch to the main branch
+git clone https://github.com/amani-patrick/XWZ_parking_National_Exam.git
+cd XWZ_parking_National_Exam
+
+# 2.0 Pull the pre-built cloud images (takes seconds)
 docker-compose pull
 
-# 2. Start all services in the background
+# 3.0 Start all services in the background
 docker-compose up -d
 
-# 3. Initialize database (first time only)
+# 3.1 Initialize database (first time only)
 docker exec -i xwz-parking-postgres-1 psql -U xwz -d xwz_parking < schema.sql
 ```
 
@@ -231,3 +235,4 @@ xwz-parking/
         ├── services/
         └── context/
 ```
+
