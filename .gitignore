@@ -1,0 +1,21 @@
+# Environment Variables
+.env
+**/.env
+api-gateway/.env
+frontend/.env
+services/auth-service/.env
+services/parking-service/.env
+services/entry-service/.env
+services/report-service/.env
+
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build Outputs
+build/
+dist/
+
+# Keep example env files in source control
+!.env.example

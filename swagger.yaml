@@ -1,0 +1,545 @@
+openapi: 3.0.0
+info:
+  title: XWZ Parking Management System API
+  description: |
+    Microservices-based Car Parking Management System for XWZ Ltd, Kigali Rwanda.
+    
+    ## Architecture
+    - **API Gateway** (port 5000) — routes all requests
+    - **Auth Service** (port 5001) — user registration, login, JWT
+    - **Parking Service** (port 5002) — parking CRUD
+    - **Entry Service** (port 5003) — car entry/exit, tickets, bills
+    - **Report Service** (port 5004) — analytics & reporting
+    
+    ## Default Admin
+    - Email: `admin@xwzparking.rw`
+    - Password: `Admin@1234`
+  version: 1.0.0
+  contact:
+    name: XWZ Ltd
+    email: dev@xwzparking.rw
+
+servers:
+  - url: http://localhost:5000/api
+    description: Local API Gateway
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, parking_tenant] }
+        createdAt: { type: string, format: date-time }
+    
+    Parking:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, example: KGL001 }
+        name: { type: string, example: Kigali City Center Parking }
+        totalSpaces: { type: integer, example: 100 }
+        availableSpaces: { type: integer, example: 45 }
+        occupiedSpaces: { type: integer, example: 55 }
+        occupancyRate: { type: string, example: "55.0" }
+        location: { type: string, example: "KG 7 Ave, Kigali" }
+        feePerHour: { type: number, example: 500 }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    
+    CarEntry:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        plateNumber: { type: string, example: RAC 001 A }
+        parkingCode: { type: string, example: KGL001 }
+        parkingName: { type: string }
+        entryDatetime: { type: string, format: date-time }
+        exitDatetime: { type: string, format: date-time, nullable: true }
+        chargedAmount: { type: number, example: 0 }
+        ticketNumber: { type: string, example: TKT-20241201120000-1234 }
+        status: { type: string, enum: [parked, exited] }
+    
+    Pagination:
+      type: object
+      properties:
+        page: { type: integer }
+        limit: { type: integer }
+        total: { type: integer }
+        totalPages: { type: integer }
+    
+    Error:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        message: { type: string }
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register new user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName, email, password]
+              properties:
+                firstName: { type: string, example: John }
+                lastName: { type: string, example: Doe }
+                email: { type: string, format: email, example: john@example.com }
+                password: { type: string, example: "Pass@1234" }
+                role: { type: string, enum: [admin, parking_tenant], default: parking_tenant }
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+                      token: { type: string }
+        '400': { description: Validation error }
+        '409': { description: Email already exists }
+
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Login user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email, example: admin@xwzparking.rw }
+                password: { type: string, example: "Admin@1234" }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      user: { $ref: '#/components/schemas/User' }
+                      token: { type: string }
+        '401': { description: Invalid credentials }
+
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get current user profile
+      responses:
+        '200': { description: Current user data }
+        '401': { description: Unauthorized }
+
+  /auth/users:
+    get:
+      tags: [Users]
+      summary: Get all users (Admin only)
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/User' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+
+  /auth/users/{id}/toggle:
+    patch:
+      tags: [Users]
+      summary: Toggle user active status (Admin only)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: User status toggled }
+        '404': { description: User not found }
+
+  /parkings:
+    post:
+      tags: [Parkings]
+      summary: Register new parking (Admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name, totalSpaces, location, feePerHour]
+              properties:
+                code: { type: string, example: KGL001 }
+                name: { type: string, example: Kigali City Center Parking }
+                totalSpaces: { type: integer, example: 100 }
+                location: { type: string, example: "KG 7 Ave, Kigali" }
+                feePerHour: { type: number, example: 500 }
+      responses:
+        '201':
+          description: Parking created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data: { $ref: '#/components/schemas/Parking' }
+        '409': { description: Parking code already exists }
+
+    get:
+      tags: [Parkings]
+      summary: Get all parkings
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+        - in: query
+          name: search
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of parkings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Parking' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+
+  /parkings/{code}:
+    get:
+      tags: [Parkings]
+      summary: Get parking by code
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Parking details }
+        '404': { description: Parking not found }
+
+    put:
+      tags: [Parkings]
+      summary: Update parking (Admin only)
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code, name, totalSpaces, location, feePerHour]
+              properties:
+                code: { type: string }
+                name: { type: string }
+                totalSpaces: { type: integer }
+                location: { type: string }
+                feePerHour: { type: number }
+      responses:
+        '200': { description: Parking updated }
+        '404': { description: Parking not found }
+
+    delete:
+      tags: [Parkings]
+      summary: Deactivate parking (Admin only)
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+      responses:
+        '200': { description: Parking deactivated }
+        '404': { description: Parking not found }
+
+  /entries:
+    post:
+      tags: [Car Entries]
+      summary: Register car entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [plateNumber, parkingCode]
+              properties:
+                plateNumber: { type: string, example: RAC 001 A }
+                parkingCode: { type: string, example: KGL001 }
+      responses:
+        '201':
+          description: Car entry registered with ticket
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      entry: { $ref: '#/components/schemas/CarEntry' }
+                      ticket:
+                        type: object
+                        properties:
+                          ticketNumber: { type: string }
+                          plateNumber: { type: string }
+                          parkingCode: { type: string }
+                          parkingName: { type: string }
+                          entryDatetime: { type: string, format: date-time }
+                          feePerHour: { type: number }
+                      remainingSpaces: { type: integer }
+        '400': { description: Parking full or invalid data }
+        '404': { description: Parking not found }
+        '409': { description: Vehicle already parked }
+
+    get:
+      tags: [Car Entries]
+      summary: Get all car entries
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+        - in: query
+          name: search
+          schema: { type: string }
+        - in: query
+          name: status
+          schema: { type: string, enum: [parked, exited] }
+        - in: query
+          name: parkingCode
+          schema: { type: string }
+      responses:
+        '200':
+          description: List of car entries
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CarEntry' }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+
+  /entries/{id}/exit:
+    patch:
+      tags: [Car Entries]
+      summary: Register car exit and generate bill
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                exitDatetime:
+                  type: string
+                  format: date-time
+                  description: Optional. Defaults to current time if not provided.
+      responses:
+        '200':
+          description: Car exit registered with bill
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      entry: { $ref: '#/components/schemas/CarEntry' }
+                      bill:
+                        type: object
+                        properties:
+                          ticketNumber: { type: string }
+                          plateNumber: { type: string }
+                          entryDatetime: { type: string, format: date-time }
+                          exitDatetime: { type: string, format: date-time }
+                          duration: { type: string, example: "2h 30m" }
+                          durationHours: { type: number }
+                          feePerHour: { type: number }
+                          totalCharged: { type: number }
+                          currency: { type: string, example: RWF }
+        '400': { description: Already exited or invalid exit time }
+        '404': { description: Entry not found }
+
+  /reports/dashboard:
+    get:
+      tags: [Reports]
+      summary: Real-time dashboard stats (Admin only)
+      responses:
+        '200':
+          description: Dashboard statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      totalParkings: { type: integer }
+                      totalSpaces: { type: integer }
+                      availableSpaces: { type: integer }
+                      currentlyParked: { type: integer }
+                      todayRevenue: { type: string }
+                      currency: { type: string }
+                      parkingBreakdown:
+                        type: array
+                        items:
+                          type: object
+
+  /reports/outgoing:
+    get:
+      tags: [Reports]
+      summary: Outgoing cars report with total revenue (Admin only)
+      parameters:
+        - in: query
+          name: startDate
+          required: true
+          schema: { type: string, format: date-time }
+          example: "2024-01-01T00:00:00"
+        - in: query
+          name: endDate
+          required: true
+          schema: { type: string, format: date-time }
+          example: "2024-12-31T23:59:59"
+        - in: query
+          name: parkingCode
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Outgoing cars report
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/CarEntry' }
+                  summary:
+                    type: object
+                    properties:
+                      totalCars: { type: integer }
+                      totalRevenue: { type: string }
+                      currency: { type: string }
+                  pagination: { $ref: '#/components/schemas/Pagination' }
+
+  /reports/entered:
+    get:
+      tags: [Reports]
+      summary: All entered cars between date range (Admin only)
+      parameters:
+        - in: query
+          name: startDate
+          required: true
+          schema: { type: string, format: date-time }
+        - in: query
+          name: endDate
+          required: true
+          schema: { type: string, format: date-time }
+        - in: query
+          name: parkingCode
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        '200':
+          description: Entered cars report
+
+  /reports/parking/{code}/cars:
+    get:
+      tags: [Reports]
+      summary: Currently parked cars at a specific parking
+      parameters:
+        - in: path
+          name: code
+          required: true
+          schema: { type: string }
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 10 }
+      responses:
+        '200': { description: Currently parked cars at location }
