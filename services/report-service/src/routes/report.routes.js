@@ -146,19 +146,28 @@ router.get('/parking/:code/cars', authenticate, async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
   const offset = (page - 1) * limit;
 
-  const countRes = await db.query(
-    `SELECT COUNT(*) FROM car_entries WHERE parking_code = $1 AND status = 'parked'`,
-    [req.params.code.toUpperCase()]
-  );
+  let countQuery = `SELECT COUNT(*) FROM car_entries WHERE parking_code = $1 AND status = 'parked'`;
+  let queryParams = [req.params.code.toUpperCase()];
+
+  if (req.user.role !== 'admin') {
+    queryParams.push(req.user.id);
+    countQuery += ` AND attendant_id = $${queryParams.length}`;
+  }
+
+  const countRes = await db.query(countQuery, queryParams);
   const total = parseInt(countRes.rows[0].count);
 
-  const result = await db.query(
-    `SELECT ce.*, p.name as parking_name, p.fee_per_hour
+  let dataQuery = `SELECT ce.*, p.name as parking_name, p.fee_per_hour
      FROM car_entries ce JOIN parkings p ON p.code = ce.parking_code
-     WHERE ce.parking_code = $1 AND ce.status = 'parked'
-     ORDER BY ce.entry_datetime DESC LIMIT $2 OFFSET $3`,
-    [req.params.code.toUpperCase(), limit, offset]
-  );
+     WHERE ce.parking_code = $1 AND ce.status = 'parked'`;
+
+  if (req.user.role !== 'admin') {
+    dataQuery += ` AND ce.attendant_id = $${queryParams.length}`;
+  }
+
+  dataQuery += ` ORDER BY ce.entry_datetime DESC LIMIT $${queryParams.length + 1} OFFSET $${queryParams.length + 2}`;
+  
+  const result = await db.query(dataQuery, [...queryParams, limit, offset]);
 
   res.json({
     success: true,

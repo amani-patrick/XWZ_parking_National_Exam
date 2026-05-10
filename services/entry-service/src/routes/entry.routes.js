@@ -135,7 +135,14 @@ router.post('/', authenticate, async (req, res) => {
     });
   } catch (err) {
     await client.query('ROLLBACK');
-    throw err;
+    if (err.code === '23503' && err.constraint === 'car_entries_attendant_id_fkey') {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid attendant ID. The user record may have been deleted. Please log in again.' 
+      });
+    }
+    console.error('Entry Service Error:', err.message);
+    res.status(500).json({ success: false, message: 'Internal server error' });
   } finally {
     client.release();
   }
@@ -250,6 +257,11 @@ router.get('/', authenticate, async (req, res) => {
   let whereClause = 'WHERE (ce.plate_number ILIKE $1 OR ce.parking_code ILIKE $1 OR ce.ticket_number ILIKE $1)';
   const params = [`%${search}%`];
 
+  if (req.user.role !== 'admin') {
+    params.push(req.user.id);
+    whereClause += ` AND ce.attendant_id = $${params.length}`;
+  }
+
   if (status) {
     params.push(status);
     whereClause += ` AND ce.status = $${params.length}`;
@@ -294,7 +306,13 @@ router.get('/:id', authenticate, async (req, res) => {
   if (result.rows.length === 0) {
     return res.status(404).json({ success: false, message: 'Entry not found' });
   }
-  res.json({ success: true, data: formatEntry(result.rows[0]) });
+
+  const entry = result.rows[0];
+  if (req.user.role !== 'admin' && req.user.id !== entry.attendant_id) {
+    return res.status(403).json({ success: false, message: 'Forbidden: You do not have permission to view this entry' });
+  }
+
+  res.json({ success: true, data: formatEntry(entry) });
 });
 
 function formatEntry(e) {
